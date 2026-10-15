@@ -1,9 +1,8 @@
 // MainActivity.java — главный экран Android-приложения LadaDiag.
-// Версия: V1.1 (15.10.2026)
-// Изменения V1.1: добавлены поля «Госномер» и «Телефон».
-//   Перед стартом поездки проверяется, что поля заполнены.
-//   Значения сохраняются в SharedPreferences и передаются в TripRecorder.
-// Среда: Android Studio, Java 17, minSdk 24, targetSdk 34.
+// Версия: V1.2 (15.10.2026)
+// Изменения V1.2: добавлен FLAG_KEEP_SCREEN_ON (экран не гаснет,
+//   пока работает приложение). Метод connect() вызывается с контекстом.
+// Среда: Android Studio, Java 17.
 
 package com.ladadiag.android;
 
@@ -15,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -59,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Не давать экрану гаснуть, пока приложение на переднем плане.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         editCarNumber = findViewById(R.id.editCarNumber);
         editPhone = findViewById(R.id.editPhone);
         statusText = findViewById(R.id.statusText);
@@ -84,7 +87,8 @@ public class MainActivity extends AppCompatActivity {
         btnConnectElm.setOnClickListener(v -> {
             statusText.setText(R.string.status_disconnected);
             new Thread(() -> {
-                boolean ok = elmClient.connect("192.168.0.10", 35000);
+                // Передаём контекст для привязки сокета к Wi-Fi адаптера.
+                boolean ok = elmClient.connect(MainActivity.this, "192.168.0.10", 35000);
                 uiHandler.post(() -> {
                     if (ok) {
                         statusText.setText(R.string.status_connected);

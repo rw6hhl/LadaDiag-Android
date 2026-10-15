@@ -1,29 +1,31 @@
 // Elm327Client.java — TCP-клиент для ELM327 Wi-Fi.
-// Версия: V1.0 (15.10.2026)
-// Назначение: подключение к ELM327 по Wi-Fi (TCP), отправка AT-команд
-//             и OBD-II PID, чтение ответов, сброс ошибок (Mode 04).
+// Версия: V1.2 (15.10.2026)
+// Изменения V1.2: добавлена привязка сокета к Wi-Fi-сети адаптера
+//   (bindProcessToNetwork). Это устраняет проблему, когда Android
+//   маршрутизирует трафик через мобильные данные, хотя Wi-Fi подключён.
 // Среда: Android Studio, Java 17.
 
 package com.ladadiag.android;
 
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.util.Locale;
 
 public class Elm327Client {
 
     private static final String TAG = "Elm327Client";
 
-    // Таймаут соединения (мс).
     private static final int CONNECT_TIMEOUT_MS = 5000;
-    // Таймаут чтения ответа (мс).
     private static final int READ_TIMEOUT_MS = 3000;
 
     private Socket socket;
@@ -31,14 +33,42 @@ public class Elm327Client {
     private PrintWriter writer;
     private boolean connected = false;
 
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback networkCallback;
+
     /**
-     * Подключение к ELM327 по Wi-Fi.
+     * Подключение к ELM327 по Wi-Fi с привязкой к сети адаптера.
      *
-     * @param host IP-адрес ELM327 (обычно 192.168.0.10).
-     * @param port Порт (обычно 35000).
+     * @param context Контекст приложения (для ConnectivityManager).
+     * @param host    IP-адрес ELM327 (обычно 192.168.0.10).
+     * @param port    Порт (обычно 35000).
      * @return true, если подключение успешно.
      */
-    public synchronized boolean connect(String host, int port) {
+    public synchronized boolean connect(Context context, String host, int port) {
+        // --- Привязка к Wi-Fi-сети адаптера ---
+        // Android по умолчанию использует мобильные данные, если Wi-Fi без интернета.
+        // bindProcessToNetwork заставляет все TCP-соединения идти через Wi-Fi адаптера.
+        try {
+            connectivityManager = (ConnectivityManager)
+                    context.getSystemService(Context.CONNECTIVITY_SERVICE);
+
+            NetworkRequest request = new NetworkRequest.Builder()
+                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                    .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build();
+
+            connectivityManager.requestNetwork(request, new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(Network network) {
+                    connectivityManager.bindProcessToNetwork(network);
+                    Log.i(TAG, "Сокет привязан к Wi-Fi-сети адаптера");
+                }
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "Не удалось привязать сокет к Wi-Fi: " + e.getMessage());
+        }
+
+        // --- Подключение TCP ---
         try {
             socket = new Socket();
             socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
@@ -49,14 +79,13 @@ public class Elm327Client {
 
             connected = true;
 
-            // Инициализация ELM327.
-            sendCommand("ATZ");      // Сброс адаптера.
-            Thread.sleep(500);        // Пауза после сброса.
-            sendCommand("ATE0");      // Отключение эха.
-            sendCommand("ATL0");      // Отключение переводов строк.
-            sendCommand("ATH0");      // Отключение заголовков.
-            sendCommand("ATSP6");     // Протокол ISO 15765-4 CAN (11 бит, 500 кбит/с).
-            sendCommand("ATAT1");     // Автоматическая настройка таймаутов.
+            sendCommand("ATZ");
+            Thread.sleep(500);
+            sendCommand("ATE0");
+            sendCommand("ATL0");
+            sendCommand("ATH0");
+            sendCommand("ATSP6");
+            sendCommand("ATAT1");
             Thread.sleep(100);
 
             Log.i(TAG, "ELM327 подключён: " + host + ":" + port);
@@ -69,12 +98,6 @@ public class Elm327Client {
         }
     }
 
-    /**
-     * Отправка AT-команды или OBD-II PID.
-     *
-     * @param command Команда (например, "010C").
-     * @return Ответ ELM327 без пробелов и переводов строк.
-     */
     public synchronized String sendCommand(String command) {
         if (!connected || writer == null || reader == null) {
             return "";
@@ -86,7 +109,6 @@ public class Elm327Client {
             StringBuilder sb = new StringBuilder();
             String line;
             long startTime = System.currentTimeMillis();
-            // Чтение до символа '>' (prompt) или до таймаута.
             while ((line = reader.readLine()) != null) {
                 if (line.contains(">")) {
                     sb.append(line.replace(">", "").trim());
@@ -106,13 +128,6 @@ public class Elm327Client {
         }
     }
 
-    /**
-     * Чтение OBD-II PID.
-     *
-     * @param pid  PID (например, "010C").
-     * @param len  Ожидаемая длина данных (1 или 2 байта).
-     * @return Числовое значение (сырое, до парсинга).
-     */
     public synchronized int readPid(String pid, int len) {
         String response = sendCommand(pid);
         if (response.isEmpty() || response.contains("NO DATA")
@@ -120,8 +135,6 @@ public class Elm327Client {
             return -1;
         }
         try {
-            // Ответ формата "41 0C 1A F8" — берём байты после "41 0C".
-            // После отправки AT H0 (headers off) ответ: "410C1AF8".
             if (response.length() < 4 + len * 2) {
                 return -1;
             }
@@ -133,33 +146,27 @@ public class Elm327Client {
         }
     }
 
-    /**
-     * Сброс ошибок (OBD-II Mode 04 — Clear DTC).
-     * Отправляет команду "04" в CAN-шину автомобиля.
-     *
-     * @return true, если команда выполнена успешно.
-     */
     public synchronized boolean clearDtc() {
         String response = sendCommand("04");
-        // Успешный ответ: "44" (positive response to Mode 04)
-        // или пустой ответ (некоторые ELM327 не отвечают на Mode 04).
         boolean ok = response.isEmpty() || response.startsWith("44");
         Log.i(TAG, "Clear DTC: " + response + " → " + (ok ? "OK" : "FAIL"));
         return ok;
     }
 
-    /**
-     * Проверка состояния подключения.
-     */
     public boolean isConnected() {
         return connected && socket != null && socket.isConnected();
     }
 
-    /**
-     * Отключение от ELM327.
-     */
     public synchronized void disconnect() {
         connected = false;
+        // Отвязка от сети адаптера (возврат к мобильным данным).
+        try {
+            if (connectivityManager != null) {
+                connectivityManager.bindProcessToNetwork(null);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Не удалось отвязать сокет: " + e.getMessage());
+        }
         try {
             if (reader != null) reader.close();
             if (writer != null) writer.close();
