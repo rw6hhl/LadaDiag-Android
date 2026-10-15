@@ -1,19 +1,18 @@
 # build.yml — workflow сборки APK через GitHub Actions.
-# Версия: V1.0 (15.10.2026)
+# Версия: V1.1 (15.10.2026)
+# Изменения V1.1: убран параметр packages у setup-android
+#   (на ubuntu-24.04 SDK уже предустановлен).
 # Назначение: автоматическая сборка debug-APK при push в main,
 #             загрузка артефакта, автопубликация в папку apk/.
-# Среда: ubuntu-24.04, JDK 17 (Temurin), Android SDK 34.
-# Схема повторяет рабочий workflow из Android-Link-PMR.
+# Среда: ubuntu-24.04, JDK 17 (Temurin).
 
 name: Build APK
 
-# Триггеры: push в main/master, ручной запуск.
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
-# Разрешение на запись в репозиторий (для автопубликации APK).
 permissions:
   contents: write
 
@@ -28,7 +27,6 @@ jobs:
         uses: actions/checkout@v4
 
       # ---------- Шаг 2. Установка JDK 17 ----------
-      # Eclipse Temurin 17 — совместим с Android Gradle Plugin 8.1.4.
       - name: Установка JDK 17 (Temurin)
         uses: actions/setup-java@v5
         with:
@@ -36,13 +34,11 @@ jobs:
           java-version: '17'
 
       # ---------- Шаг 3. Установка Android SDK ----------
+      # Параметр packages НЕ указываем: на ubuntu-24.04 SDK
+      # (platform-tools, platforms;android-34, build-tools;34.0.0)
+      # уже предустановлен. Это устраняет ошибку V1.0.
       - name: Установка Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-34
-            build-tools;34.0.0
 
       # ---------- Шаг 4. Принятие лицензий SDK ----------
       - name: Принятие лицензий SDK
@@ -64,7 +60,6 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
 
       # ---------- Шаг 8. Автопубликация в apk/ ----------
-      # Выполняется только при push в main (не при ручном запуске).
       - name: Публикация APK в папку apk/
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
