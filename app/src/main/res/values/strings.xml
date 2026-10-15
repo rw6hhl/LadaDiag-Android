@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   strings.xml — строковые ресурсы приложения (русский язык).
-  Версия: V1.0 (15.10.2026)
+  Версия: V1.1 (15.10.2026)
+  Изменения V1.1: добавлены строки для полей «Госномер» и «Телефон».
   Согласно A3.1 — все строки на русском.
 -->
 <resources>
@@ -9,6 +10,8 @@
 
     <!-- Главный экран -->
     <string name="title_main">LadaDiag — сбор данных ELM327</string>
+    <string name="label_car_number">Госномер машины (например, в113ур)</string>
+    <string name="label_phone">Телефон владельца (например, +79123456789)</string>
     <string name="btn_connect_elm">Подключиться к ELM327</string>
     <string name="btn_start_trip">Начать поездку</string>
     <string name="btn_stop_trip">Остановить поездку</string>
@@ -24,6 +27,8 @@
 
     <!-- Сообщения -->
     <string name="msg_elm_not_connected">Сначала подключитесь к ELM327</string>
+    <string name="msg_enter_car_number">Введите госномер машины</string>
+    <string name="msg_enter_phone">Введите телефон владельца</string>
     <string name="msg_confirm_clear_dtc">Сбросить ошибки? Это очистит Check Engine и стоп-кадры.</string>
     <string name="msg_confirm_yes">Да</string>
     <string name="msg_confirm_no">Отмена</string>
