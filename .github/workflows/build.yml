@@ -1,9 +1,9 @@
 # build.yml — workflow сборки APK через GitHub Actions.
-# Версия: V1.1 (15.10.2026)
-# Изменения V1.1: убран параметр packages у setup-android
-#   (на ubuntu-24.04 SDK уже предустановлен).
-# Назначение: автоматическая сборка debug-APK при push в main,
-#             загрузка артефакта, автопубликация в папку apk/.
+# Версия: V1.2 (15.10.2026)
+# Изменения V1.2: параметр packages установлен в '' (пустая строка),
+#   так как Google удалил пакет 'tools' из репозитория SDK.
+#   AGP сам скачает нужные platform и build-tools.
+# Назначение: автоматическая сборка debug-APK при push в main.
 # Среда: ubuntu-24.04, JDK 17 (Temurin).
 
 name: Build APK
@@ -34,11 +34,14 @@ jobs:
           java-version: '17'
 
       # ---------- Шаг 3. Установка Android SDK ----------
-      # Параметр packages НЕ указываем: на ubuntu-24.04 SDK
-      # (platform-tools, platforms;android-34, build-tools;34.0.0)
-      # уже предустановлен. Это устраняет ошибку V1.0.
+      # Параметр packages = '' (пустая строка) — критично!
+      # Google удалил пакет 'tools', и значение по умолчанию
+      # (tools platform-tools) вызывает ошибку "Failed to find package 'tools'".
+      # AGP сам скачает platform и build-tools.
       - name: Установка Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       # ---------- Шаг 4. Принятие лицензий SDK ----------
       - name: Принятие лицензий SDK
