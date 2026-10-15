@@ -1,7 +1,8 @@
 // TripRecorder.java — запись CSV-файла поездки.
-// Версия: V1.0 (15.10.2026)
-// Назначение: накопление данных о поездке в CSV-файл
-//             (совместимый с ESP32-версией) для последующей передачи на ПК.
+// Версия: V1.1 (15.10.2026)
+// Изменения V1.1: имя файла формируется как <госномер>_<NNN>.csv
+//   (например, в113ур_001.csv). В CSV добавляются метаданные:
+//   госномер и телефон владельца в первых двух строках (комментарии).
 // Среда: Android Studio, Java 17.
 
 package com.ladadiag.android;
@@ -13,17 +14,12 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Locale;
 
 public class TripRecorder {
 
     private static final String TAG = "TripRecorder";
 
-    // Заголовок CSV — совместим с ESP32-версией (config.h V1.1).
-    // ESP32 пишет: ts;rpm;speed;coolant;throttle;fuel;batt_obd;batt_adc;...
-    // Android пишет подмножество: ts;rpm;speed;coolant;throttle;batt_obd
     private static final String CSV_HEADER = "ts;rpm;speed;coolant;throttle;batt_obd";
     private static final String CSV_DELIMITER = ";";
     private static final String CSV_LINE_END = "\r\n";
@@ -35,6 +31,9 @@ public class TripRecorder {
     private boolean isRecording = false;
     private long tripStartTime;
 
+    private String carNumber = "";
+    private String phoneNumber = "";
+
     public TripRecorder(Context context) {
         this.context = context;
         this.tripDirectory = new File(
@@ -42,22 +41,27 @@ public class TripRecorder {
                 "LadaDiag/trips");
     }
 
-    /**
-     * Начало записи поездки.
-     * Создаёт CSV-файл с именем, содержащим дату и время.
-     */
-    public synchronized void startTrip() {
+    public synchronized void startTrip(String carNumber, String phone) {
+        this.carNumber = carNumber != null ? carNumber.trim() : "";
+        this.phoneNumber = phone != null ? phone.trim() : "";
+
         try {
             if (!tripDirectory.exists()) {
                 tripDirectory.mkdirs();
             }
-            // Имя файла: trip_YYYY-MM-DD_HH-MM-SS.csv
-            SimpleDateFormat sdf = new SimpleDateFormat(
-                    "yyyy-MM-dd_HH-mm-ss", Locale.US);
-            String fileName = "trip_" + sdf.format(new Date()) + ".csv";
+
+            String safeCarNumber = sanitizeFileName(this.carNumber);
+            int nextNumber = findNextTripNumber(safeCarNumber);
+            String fileName = String.format(Locale.US, "%s_%03d.csv",
+                    safeCarNumber, nextNumber);
             csvFile = new File(tripDirectory, fileName);
 
             writer = new FileWriter(csvFile, false);
+
+            writer.write("# car_number=" + this.carNumber + CSV_LINE_END);
+            writer.write("# phone=" + this.phoneNumber + CSV_LINE_END);
+            writer.write("# started_at=" + System.currentTimeMillis() + CSV_LINE_END);
+
             writer.write(CSV_HEADER + CSV_LINE_END);
             writer.flush();
 
@@ -70,23 +74,43 @@ public class TripRecorder {
         }
     }
 
-    /**
-     * Запись одной строки данных.
-     *
-     * @param rpm      Обороты (об/мин).
-     * @param speed    Скорость (км/ч).
-     * @param coolant  Температура ОЖ (°C).
-     * @param throttle Положение дросселя (%).
-     * @param battObd  Напряжение бортсети (В).
-     */
+    private int findNextTripNumber(String safeCarNumber) {
+        int maxNumber = 0;
+        File[] files = tripDirectory.listFiles();
+        if (files == null) {
+            return 1;
+        }
+        String prefix = safeCarNumber + "_";
+        for (File f : files) {
+            String name = f.getName();
+            if (!name.startsWith(prefix) || !name.endsWith(".csv")) {
+                continue;
+            }
+            String middle = name.substring(prefix.length(), name.length() - 4);
+            try {
+                int n = Integer.parseInt(middle);
+                if (n > maxNumber) {
+                    maxNumber = n;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return maxNumber + 1;
+    }
+
+    private String sanitizeFileName(String name) {
+        if (name == null || name.isEmpty()) {
+            return "unknown";
+        }
+        return name.replaceAll("[\\\\/:*?\"<>|\\s]+", "_");
+    }
+
     public synchronized void writeSample(double rpm, int speed, int coolant,
                                           double throttle, double battObd) {
         if (!isRecording || writer == null) {
             return;
         }
         try {
-            // Метка времени — миллисекунды от начала поездки
-            // (совместимо с ESP32, где ts = millis()).
             long ts = System.currentTimeMillis() - tripStartTime;
             String line = String.format(Locale.US,
                     "%d;%.0f;%d;%d;%.1f;%.2f",
@@ -98,11 +122,6 @@ public class TripRecorder {
         }
     }
 
-    /**
-     * Остановка записи поездки.
-     *
-     * @return CSV-файл поездки или null при ошибке.
-     */
     public synchronized File stopTrip() {
         isRecording = false;
         try {
@@ -114,20 +133,15 @@ public class TripRecorder {
         } catch (IOException e) {
             Log.e(TAG, "Ошибка закрытия файла: " + e.getMessage(), e);
         }
-        Log.i(TAG, "Запись остановлена: " + (csvFile != null ? csvFile.getName() : "null"));
+        Log.i(TAG, "Запись остановлена: " +
+                (csvFile != null ? csvFile.getName() : "null"));
         return csvFile;
     }
 
-    /**
-     * Каталог с файлами поездок (для отправки через LocalSend).
-     */
     public File getTripDirectory() {
         return tripDirectory;
     }
 
-    /**
-     * Текущий CSV-файл поездки.
-     */
     public File getCurrentFile() {
         return csvFile;
     }

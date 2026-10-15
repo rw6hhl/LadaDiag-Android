@@ -1,19 +1,22 @@
 // MainActivity.java — главный экран Android-приложения LadaDiag.
-// Версия: V1.0 (15.10.2026)
-// Назначение: управление подключением к ELM327, записью поездки,
-//             сбросом ошибок (OBD-II Mode 04) и отправкой файлов на ПК.
+// Версия: V1.1 (15.10.2026)
+// Изменения V1.1: добавлены поля «Госномер» и «Телефон».
+//   Перед стартом поездки проверяется, что поля заполнены.
+//   Значения сохраняются в SharedPreferences и передаются в TripRecorder.
 // Среда: Android Studio, Java 17, minSdk 24, targetSdk 34.
 
 package com.ladadiag.android;
 
 import android.Manifest;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.View;
+import android.text.TextUtils;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,10 +31,13 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
-    // ---------- Константы ----------
     private static final int REQUEST_PERMISSIONS = 100;
+    private static final String PREFS_NAME = "LadaDiagPrefs";
+    private static final String KEY_CAR_NUMBER = "car_number";
+    private static final String KEY_PHONE = "phone";
 
-    // ---------- UI-элементы ----------
+    private EditText editCarNumber;
+    private EditText editPhone;
     private TextView statusText;
     private TextView dataText;
     private Button btnConnectElm;
@@ -40,13 +46,12 @@ public class MainActivity extends AppCompatActivity {
     private Button btnClearDtc;
     private Button btnSendFiles;
 
-    // ---------- Логика ----------
     private Elm327Client elmClient;
     private TripRecorder tripRecorder;
     private LocalSendSender localSendSender;
     private Handler uiHandler;
+    private SharedPreferences prefs;
 
-    // Флаг: идёт ли запись поездки.
     private boolean isTripRecording = false;
 
     @Override
@@ -54,7 +59,8 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Инициализация UI.
+        editCarNumber = findViewById(R.id.editCarNumber);
+        editPhone = findViewById(R.id.editPhone);
         statusText = findViewById(R.id.statusText);
         dataText = findViewById(R.id.dataText);
         btnConnectElm = findViewById(R.id.btnConnectElm);
@@ -64,19 +70,19 @@ public class MainActivity extends AppCompatActivity {
         btnSendFiles = findViewById(R.id.btnSendFiles);
 
         uiHandler = new Handler(Looper.getMainLooper());
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        // Инициализация логики.
+        editCarNumber.setText(prefs.getString(KEY_CAR_NUMBER, ""));
+        editPhone.setText(prefs.getString(KEY_PHONE, ""));
+
         elmClient = new Elm327Client();
         tripRecorder = new TripRecorder(this);
         localSendSender = new LocalSendSender(this);
 
-        // Запрос разрешений (Wi-Fi, хранилище).
         requestPermissionsIfNeeded();
 
-        // ---------- Обработчик кнопки «Подключиться к ELM327» ----------
         btnConnectElm.setOnClickListener(v -> {
             statusText.setText(R.string.status_disconnected);
-            // Подключение в фоновом потоке (сеть нельзя в UI-потоке).
             new Thread(() -> {
                 boolean ok = elmClient.connect("192.168.0.10", 35000);
                 uiHandler.post(() -> {
@@ -94,25 +100,44 @@ public class MainActivity extends AppCompatActivity {
             }).start();
         });
 
-        // ---------- Обработчик кнопки «Начать поездку» ----------
         btnStartTrip.setOnClickListener(v -> {
             if (!elmClient.isConnected()) {
                 Toast.makeText(this, R.string.msg_elm_not_connected,
                         Toast.LENGTH_SHORT).show();
                 return;
             }
+            String carNumber = editCarNumber.getText().toString().trim();
+            if (TextUtils.isEmpty(carNumber)) {
+                Toast.makeText(this, R.string.msg_enter_car_number,
+                        Toast.LENGTH_SHORT).show();
+                editCarNumber.requestFocus();
+                return;
+            }
+            String phone = editPhone.getText().toString().trim();
+            if (TextUtils.isEmpty(phone)) {
+                Toast.makeText(this, R.string.msg_enter_phone,
+                        Toast.LENGTH_SHORT).show();
+                editPhone.requestFocus();
+                return;
+            }
+
+            prefs.edit()
+                 .putString(KEY_CAR_NUMBER, carNumber)
+                 .putString(KEY_PHONE, phone)
+                 .apply();
+
             isTripRecording = true;
-            tripRecorder.startTrip();
+            tripRecorder.startTrip(carNumber, phone);
             statusText.setText(R.string.status_trip_recording);
             btnStartTrip.setEnabled(false);
             btnStopTrip.setEnabled(true);
             btnConnectElm.setEnabled(false);
+            editCarNumber.setEnabled(false);
+            editPhone.setEnabled(false);
 
-            // Запуск цикла опроса PID (10 Гц).
             startPollingLoop();
         });
 
-        // ---------- Обработчик кнопки «Остановить поездку» ----------
         btnStopTrip.setOnClickListener(v -> {
             isTripRecording = false;
             File csvFile = tripRecorder.stopTrip();
@@ -120,17 +145,15 @@ public class MainActivity extends AppCompatActivity {
             btnStartTrip.setEnabled(true);
             btnStopTrip.setEnabled(false);
             btnConnectElm.setEnabled(true);
+            editCarNumber.setEnabled(true);
+            editPhone.setEnabled(true);
             if (csvFile != null) {
                 Toast.makeText(this, "Файл сохранён: " + csvFile.getName(),
                         Toast.LENGTH_LONG).show();
             }
         });
 
-        // ---------- Обработчик кнопки «Сбросить ошибки» ----------
-        // Согласно требованию: кнопка встроена в главный экран.
-        // Отправляет OBD-II команду 04 (Clear DTC).
         btnClearDtc.setOnClickListener(v -> {
-            // Подтверждение — действие необратимое.
             new AlertDialog.Builder(this)
                     .setTitle(R.string.btn_clear_dtc)
                     .setMessage(R.string.msg_confirm_clear_dtc)
@@ -153,7 +176,6 @@ public class MainActivity extends AppCompatActivity {
                     .show();
         });
 
-        // ---------- Обработчик кнопки «Отправить файлы на ПК» ----------
         btnSendFiles.setOnClickListener(v -> {
             File tripDir = tripRecorder.getTripDirectory();
             if (tripDir == null || !tripDir.exists()) {
@@ -175,31 +197,24 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    // ---------- Цикл опроса PID ----------
-    // Каждые 100 мс читает набор PID и пишет строку в CSV.
     private void startPollingLoop() {
         new Thread(() -> {
             while (isTripRecording) {
-                // Чтение RPM (010C), Speed (010D), Coolant (0105),
-                // Throttle (0111), Battery (0142).
-                int rpm = elmClient.readPid("010C", 2);       // 2 байта
-                int speed = elmClient.readPid("010D", 1);     // 1 байт
-                int coolant = elmClient.readPid("0105", 1);   // 1 байт
-                int throttle = elmClient.readPid("0111", 1);  // 1 байт
-                int battObd = elmClient.readPid("0142", 2);   // 2 байта
+                int rpm = elmClient.readPid("010C", 2);
+                int speed = elmClient.readPid("010D", 1);
+                int coolant = elmClient.readPid("0105", 1);
+                int throttle = elmClient.readPid("0111", 1);
+                int battObd = elmClient.readPid("0142", 2);
 
-                // Парсинг по формулам OBD-II.
                 double rpmVal = PidParser.parseRpm(rpm);
                 int speedVal = PidParser.parseSpeed(speed);
                 int coolantVal = PidParser.parseCoolant(coolant);
                 double throttleVal = PidParser.parseThrottle(throttle);
                 double battVal = PidParser.parseBattery(battObd);
 
-                // Запись строки в CSV.
                 tripRecorder.writeSample(rpmVal, speedVal, coolantVal,
                         throttleVal, battVal);
 
-                // Обновление UI (раз в 1 секунду — чтобы не перегружать).
                 final String display = String.format(Locale.US,
                         "Обороты: %.0f\nСкорость: %d км/ч\n" +
                         "ОЖ: %d °C\nДроссель: %.1f %%\n" +
@@ -208,7 +223,6 @@ public class MainActivity extends AppCompatActivity {
                         throttleVal, battVal);
                 uiHandler.post(() -> dataText.setText(display));
 
-                // Пауза 100 мс (10 Гц).
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
@@ -219,7 +233,6 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    // ---------- Запрос разрешений ----------
     private void requestPermissionsIfNeeded() {
         String[] perms;
         if (Build.VERSION.SDK_INT >= 33) {
@@ -251,15 +264,11 @@ public class MainActivity extends AppCompatActivity {
                                            @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_PERMISSIONS) {
-            // Разрешения запрошены. Обработка отказа — по факту.
-        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Корректное закрытие соединений.
         isTripRecording = false;
         if (tripRecorder != null) tripRecorder.stopTrip();
         if (elmClient != null) elmClient.disconnect();
