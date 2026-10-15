@@ -1,14 +1,17 @@
 // TripRecorder.java — запись CSV-файла поездки.
-// Версия: V1.1 (15.10.2026)
-// Изменения V1.1: имя файла формируется как <госномер>_<NNN>.csv
-//   (например, в113ур_001.csv). В CSV добавляются метаданные:
-//   госномер и телефон владельца в первых двух строках (комментарии).
+// Версия: V1.2 (15.10.2026)
+// Изменения V1.2 (относительно V1.1):
+//   - Путь сохранения изменён с Environment.getExternalStorageDirectory()
+//     на context.getExternalFilesDir(null) — это «песочница» приложения,
+//     работает на всех Android без разрешений (Scoped Storage).
+//   - Добавлена проверка: файл реально создан (csvFile.exists()).
+//   - Имя файла формируется как <госномер>_<NNN>.csv.
+//   - В CSV добавляются метаданные: госномер и телефон владельца.
 // Среда: Android Studio, Java 17.
 
 package com.ladadiag.android;
 
 import android.content.Context;
-import android.os.Environment;
 import android.util.Log;
 
 import java.io.File;
@@ -36,18 +39,31 @@ public class TripRecorder {
 
     public TripRecorder(Context context) {
         this.context = context;
-        this.tripDirectory = new File(
-                Environment.getExternalStorageDirectory(),
-                "LadaDiag/trips");
+        // «Песочница» приложения:
+        // /storage/emulated/0/Android/data/com.ladadiag.android/files/trips/
+        // Работает на всех Android без разрешений.
+        this.tripDirectory = new File(context.getExternalFilesDir(null), "trips");
     }
 
-    public synchronized void startTrip(String carNumber, String phone) {
+    /**
+     * Начало записи поездки.
+     * Имя файла: <госномер>_<NNN>.csv (например, в113ур26_001.csv).
+     *
+     * @param carNumber Госномер машины (например, "в113ур26").
+     * @param phone     Телефон владельца (например, "+79123456789").
+     * @return true, если файл успешно создан; false — если ошибка.
+     */
+    public synchronized boolean startTrip(String carNumber, String phone) {
         this.carNumber = carNumber != null ? carNumber.trim() : "";
         this.phoneNumber = phone != null ? phone.trim() : "";
 
         try {
             if (!tripDirectory.exists()) {
-                tripDirectory.mkdirs();
+                boolean created = tripDirectory.mkdirs();
+                if (!created && !tripDirectory.exists()) {
+                    Log.e(TAG, "Не удалось создать папку: " + tripDirectory);
+                    return false;
+                }
             }
 
             String safeCarNumber = sanitizeFileName(this.carNumber);
@@ -65,12 +81,20 @@ public class TripRecorder {
             writer.write(CSV_HEADER + CSV_LINE_END);
             writer.flush();
 
+            // Проверка: файл реально создан.
+            if (!csvFile.exists()) {
+                Log.e(TAG, "Файл не создан: " + csvFile.getAbsolutePath());
+                return false;
+            }
+
             tripStartTime = System.currentTimeMillis();
             isRecording = true;
             Log.i(TAG, "Начало записи: " + csvFile.getAbsolutePath());
+            return true;
         } catch (IOException e) {
             Log.e(TAG, "Ошибка старта записи: " + e.getMessage(), e);
             isRecording = false;
+            return false;
         }
     }
 
