@@ -1,0 +1,42 @@
+// app/build.gradle — конфигурация модуля приложения.
+// Версия: V1.0 (15.10.2026)
+// Назначение: сборка APK для Android 7.0+ (API 24).
+
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ladadiag.android'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.ladadiag.android"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                          'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // AndroidX AppCompat — базовые компоненты UI.
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    // Material Components — кнопки, поля ввода в стиле Material Design.
+    implementation 'com.google.android.material:material:1.11.0'
+    // ConstraintLayout — гибкая разметка главного экрана.
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+}

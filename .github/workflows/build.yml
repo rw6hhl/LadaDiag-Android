@@ -1,0 +1,79 @@
+# build.yml — workflow сборки APK через GitHub Actions.
+# Версия: V1.0 (15.10.2026)
+# Назначение: автоматическая сборка debug-APK при push в main,
+#             загрузка артефакта, автопубликация в папку apk/.
+# Среда: ubuntu-24.04, JDK 17 (Temurin), Android SDK 34.
+# Схема повторяет рабочий workflow из Android-Link-PMR.
+
+name: Build APK
+
+# Триггеры: push в main/master, ручной запуск.
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+# Разрешение на запись в репозиторий (для автопубликации APK).
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Сборка debug-APK
+    runs-on: ubuntu-24.04
+
+    steps:
+      # ---------- Шаг 1. Получение кода ----------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- Шаг 2. Установка JDK 17 ----------
+      # Eclipse Temurin 17 — совместим с Android Gradle Plugin 8.1.4.
+      - name: Установка JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ---------- Шаг 3. Установка Android SDK ----------
+      - name: Установка Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
+
+      # ---------- Шаг 4. Принятие лицензий SDK ----------
+      - name: Принятие лицензий SDK
+        run: yes | sdkmanager --licenses || true
+
+      # ---------- Шаг 5. Права на gradlew ----------
+      - name: Права на gradlew
+        run: chmod +x gradlew
+
+      # ---------- Шаг 6. Сборка APK ----------
+      - name: Сборка APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      # ---------- Шаг 7. Загрузка артефакта ----------
+      - name: Загрузка APK как артефакта
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+      # ---------- Шаг 8. Автопубликация в apk/ ----------
+      # Выполняется только при push в main (не при ручном запуске).
+      - name: Публикация APK в папку apk/
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p apk
+          VERSION=$(date +%Y%m%d-%H%M%S)
+          cp app/build/outputs/apk/debug/app-debug.apk apk/app-${VERSION}.apk
+          echo "app-${VERSION}.apk" > apk/latest.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apk/
+          git commit -m "Publish app-${VERSION}.apk [skip ci]" || echo "Нечего коммитить"
+          git push origin main

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ic_launcher.xml — адаптивная иконка приложения (Android 8.0+).
+  Версия: V1.0 (15.10.2026)
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/primary" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

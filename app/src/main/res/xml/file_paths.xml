@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  file_paths.xml — конфигурация FileProvider.
+  Версия: V1.0 (15.10.2026)
+  Назначение: разрешить LocalSend читать CSV-файлы из /sdcard/LadaDiag/trips/.
+  Без этого файла LocalSend получит "Permission denied" при передаче.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Каталог поездок во внешнем хранилище. -->
+    <external-path
+        name="ladadiag_trips"
+        path="LadaDiag/trips/" />
+    <!-- Общий доступ к внешнему хранилищу (на случай смены пути). -->
+    <external-path
+        name="ladadiag_root"
+        path="LadaDiag/" />
+</paths>

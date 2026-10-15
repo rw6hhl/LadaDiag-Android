@@ -1,0 +1,27 @@
+// Корневой build.gradle проекта LadaDiag-Android
+// Версия: V1.0 (15.10.2026)
+// Назначение: подключение плагинов Gradle для сборки Android-приложения.
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Android Gradle Plugin 8.1.4 — стабильная версия,
+        // совместимая с Java 17 и Android Studio 2022.3+.
+        classpath 'com.android.tools.build:gradle:8.1.4'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Задача очистки: удаляет папку build в корне проекта.
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  strings.xml — строковые ресурсы приложения (русский язык).
+  Версия: V1.0 (15.10.2026)
+  Согласно A3.1 — все строки на русском.
+-->
+<resources>
+    <string name="app_name">LadaDiag</string>
+
+    <!-- Главный экран -->
+    <string name="title_main">LadaDiag — сбор данных ELM327</string>
+    <string name="btn_connect_elm">Подключиться к ELM327</string>
+    <string name="btn_start_trip">Начать поездку</string>
+    <string name="btn_stop_trip">Остановить поездку</string>
+    <string name="btn_clear_dtc">Сбросить ошибки</string>
+    <string name="btn_send_files">Отправить файлы на ПК</string>
+
+    <!-- Статусы -->
+    <string name="status_disconnected">Не подключено</string>
+    <string name="status_connected">Подключено к ELM327</string>
+    <string name="status_trip_recording">Запись поездки…</string>
+    <string name="status_trip_stopped">Поездка остановлена</string>
+    <string name="status_dtc_cleared">Ошибки сброшены</string>
+
+    <!-- Сообщения -->
+    <string name="msg_elm_not_connected">Сначала подключитесь к ELM327</string>
+    <string name="msg_confirm_clear_dtc">Сбросить ошибки? Это очистит Check Engine и стоп-кадры.</string>
+    <string name="msg_confirm_yes">Да</string>
+    <string name="msg_confirm_no">Отмена</string>
+
+    <!-- Поля данных -->
+    <string name="field_rpm">Обороты</string>
+    <string name="field_speed">Скорость</string>
+    <string name="field_coolant">Охлаждающая жидкость</string>
+    <string name="field_throttle">Дроссель</string>
+    <string name="field_batt">Напряжение</string>
+</resources>

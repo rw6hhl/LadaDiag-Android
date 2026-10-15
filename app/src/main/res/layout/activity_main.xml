@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  activity_main.xml — главный экран приложения.
+  Версия: V1.0 (15.10.2026)
+  Содержит: статус, данные в реальном времени,
+            кнопки управления (подключение, старт/стоп, СБРОС ОШИБОК, отправка).
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <!-- Заголовок -->
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="@string/title_main"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Статус подключения -->
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/status_disconnected"
+            android:textSize="16sp"
+            android:textColor="@color/text_secondary"
+            app:layout_constraintTop_toBottomOf="@id/titleText"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Кнопка подключения к ELM327 -->
+        <Button
+            android:id="@+id/btnConnectElm"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/btn_connect_elm"
+            app:layout_constraintTop_toBottomOf="@id/statusText"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Кнопка старта поездки -->
+        <Button
+            android:id="@+id/btnStartTrip"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/btn_start_trip"
+            android:enabled="false"
+            app:layout_constraintTop_toBottomOf="@id/btnConnectElm"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Кнопка остановки поездки -->
+        <Button
+            android:id="@+id/btnStopTrip"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/btn_stop_trip"
+            android:enabled="false"
+            app:layout_constraintTop_toBottomOf="@id/btnStartTrip"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- КНОПКА СБРОСА ОШИБОК (встроена в главный экран).
+             Красный цвет — опасное действие.
+             Отправляет OBD-II команду 04 в CAN-шину. -->
+        <Button
+            android:id="@+id/btnClearDtc"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/btn_clear_dtc"
+            android:textColor="@color/surface"
+            android:backgroundTint="@color/danger"
+            android:enabled="false"
+            app:layout_constraintTop_toBottomOf="@id/btnStopTrip"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Кнопка отправки файлов на ПК через LocalSend -->
+        <Button
+            android:id="@+id/btnSendFiles"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/btn_send_files"
+            app:layout_constraintTop_toBottomOf="@id/btnClearDtc"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Блок данных в реальном времени -->
+        <TextView
+            android:id="@+id/dataText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:fontFamily="monospace"
+            android:textSize="14sp"
+            android:textColor="@color/text_primary"
+            app:layout_constraintTop_toBottomOf="@id/btnSendFiles"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
