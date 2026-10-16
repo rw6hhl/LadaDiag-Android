@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   activity_main.xml — главный экран приложения.
-  Версия: V1.1 (15.10.2026)
-  Изменения V1.1: добавлены поля ввода госномера и телефона владельца.
+  Версия: V1.2 (16.10.2026)
+  Изменения V1.2: добавлен TextView с номером версии под заголовком.
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -15,6 +15,7 @@
         android:layout_height="wrap_content"
         android:padding="16dp">
 
+        <!-- Заголовок -->
         <TextView
             android:id="@+id/titleText"
             android:layout_width="0dp"
@@ -27,6 +28,20 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Номер версии -->
+        <TextView
+            android:id="@+id/versionText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="@string/version_text"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            app:layout_constraintTop_toBottomOf="@id/titleText"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Поле: Госномер машины -->
         <TextView
             android:id="@+id/labelCarNumber"
             android:layout_width="0dp"
@@ -35,7 +50,7 @@
             android:text="@string/label_car_number"
             android:textSize="14sp"
             android:textColor="@color/text_secondary"
-            app:layout_constraintTop_toBottomOf="@id/titleText"
+            app:layout_constraintTop_toBottomOf="@id/versionText"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
@@ -52,6 +67,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Поле: Телефон владельца -->
         <TextView
             android:id="@+id/labelPhone"
             android:layout_width="0dp"
@@ -77,6 +93,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Статус подключения -->
         <TextView
             android:id="@+id/statusText"
             android:layout_width="0dp"
@@ -89,6 +106,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Кнопка подключения к ELM327 -->
         <Button
             android:id="@+id/btnConnectElm"
             android:layout_width="0dp"
@@ -99,6 +117,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Кнопка старта поездки -->
         <Button
             android:id="@+id/btnStartTrip"
             android:layout_width="0dp"
@@ -110,6 +129,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Кнопка остановки поездки -->
         <Button
             android:id="@+id/btnStopTrip"
             android:layout_width="0dp"
@@ -121,6 +141,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- КНОПКА СБРОСА ОШИБОК (встроена в главный экран). -->
         <Button
             android:id="@+id/btnClearDtc"
             android:layout_width="0dp"
@@ -134,6 +155,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Кнопка отправки файлов на ПК через LocalSend -->
         <Button
             android:id="@+id/btnSendFiles"
             android:layout_width="0dp"
@@ -144,6 +166,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Блок данных в реальном времени -->
         <TextView
             android:id="@+id/dataText"
             android:layout_width="0dp"

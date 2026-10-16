@@ -1,9 +1,11 @@
 // MainActivity.java — главный экран Android-приложения LadaDiag.
-// Версия: V1.3 (15.10.2026)
-// Изменения V1.3 (относительно V1.2):
-//   - Интервал опроса PID увеличен с 100 мс до 500 мс.
-//     ELM327 не успевает отвечать на 5 PID за 100 мс (реальный цикл 10-30 сек).
-//   - Флаг FLAG_KEEP_SCREEN_ON сохранён (экран не гаснет).
+// Версия: V1.4 (16.10.2026)
+// Изменения V1.4 (относительно V1.3):
+//   - Показ номера версии на главном экране (TextView versionText).
+//   - Сообщение «Идёт подключение…» при нажатии кнопки.
+//   - Автостарт поездки после подключения к ELM327.
+//   - Автостоп поездки через 30 секунд нулевых оборотов.
+//   - Звуковые сигналы: подключение, старт поездки, стоп поездки.
 // Среда: Android Studio, Java 17.
 
 package com.ladadiag.android;
@@ -11,6 +13,8 @@ package com.ladadiag.android;
 import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -38,9 +42,11 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_CAR_NUMBER = "car_number";
     private static final String KEY_PHONE = "phone";
 
-    // Интервал опроса PID (мс). Увеличен с 100 до 500 —
-    // ELM327 не успевает отвечать на 5 PID за 100 мс.
+    // Интервал опроса PID (мс).
     private static final int PID_POLL_INTERVAL_MS = 500;
+
+    // Автостоп: если обороты = 0 дольше этого времени (мс) — остановить поездку.
+    private static final long AUTO_STOP_RPM_ZERO_MS = 30_000;
 
     private EditText editCarNumber;
     private EditText editPhone;
@@ -60,12 +66,18 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isTripRecording = false;
 
+    // Флаг: пользователь нажал кнопку «Начать поездку» вручную.
+    private boolean tripStartedManually = false;
+
+    // Время, когда обороты впервые стали нулевыми (для автостопа).
+    private long rpmZeroSince = 0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Экран не гаснет, пока приложение на переднем плане.
+        // Экран не гаснет.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         editCarNumber = findViewById(R.id.editCarNumber);
@@ -90,8 +102,11 @@ public class MainActivity extends AppCompatActivity {
 
         requestPermissionsIfNeeded();
 
+        // ---------- Подключение к ELM327 ----------
         btnConnectElm.setOnClickListener(v -> {
-            statusText.setText(R.string.status_disconnected);
+            statusText.setText(R.string.status_connecting);
+            playSound(ToneGenerator.TONE_PROP_BEEP);
+
             new Thread(() -> {
                 boolean ok = elmClient.connect(MainActivity.this, "192.168.0.10", 35000);
                 uiHandler.post(() -> {
@@ -99,9 +114,17 @@ public class MainActivity extends AppCompatActivity {
                         statusText.setText(R.string.status_connected);
                         btnStartTrip.setEnabled(true);
                         btnClearDtc.setEnabled(true);
-                        Toast.makeText(this, "ELM327 подключён", Toast.LENGTH_SHORT).show();
+                        playSound(ToneGenerator.TONE_PROP_ACK);
+                        Toast.makeText(this, "ELM327 подключён",
+                                Toast.LENGTH_SHORT).show();
+
+                        // Автостарт поездки (если пользователь не нажал кнопку вручную).
+                        if (!tripStartedManually && !isTripRecording) {
+                            startTripInternal(true);
+                        }
                     } else {
                         statusText.setText(R.string.status_disconnected);
+                        playSound(ToneGenerator.TONE_SUP_ERROR);
                         Toast.makeText(this, "Не удалось подключиться к ELM327",
                                 Toast.LENGTH_LONG).show();
                     }
@@ -109,59 +132,16 @@ public class MainActivity extends AppCompatActivity {
             }).start();
         });
 
+        // ---------- Ручной старт поездки ----------
         btnStartTrip.setOnClickListener(v -> {
-            if (!elmClient.isConnected()) {
-                Toast.makeText(this, R.string.msg_elm_not_connected,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            String carNumber = editCarNumber.getText().toString().trim();
-            if (TextUtils.isEmpty(carNumber)) {
-                Toast.makeText(this, R.string.msg_enter_car_number,
-                        Toast.LENGTH_SHORT).show();
-                editCarNumber.requestFocus();
-                return;
-            }
-            String phone = editPhone.getText().toString().trim();
-            if (TextUtils.isEmpty(phone)) {
-                Toast.makeText(this, R.string.msg_enter_phone,
-                        Toast.LENGTH_SHORT).show();
-                editPhone.requestFocus();
-                return;
-            }
-
-            prefs.edit()
-                 .putString(KEY_CAR_NUMBER, carNumber)
-                 .putString(KEY_PHONE, phone)
-                 .apply();
-
-            isTripRecording = true;
-            tripRecorder.startTrip(carNumber, phone);
-            statusText.setText(R.string.status_trip_recording);
-            btnStartTrip.setEnabled(false);
-            btnStopTrip.setEnabled(true);
-            btnConnectElm.setEnabled(false);
-            editCarNumber.setEnabled(false);
-            editPhone.setEnabled(false);
-
-            startPollingLoop();
+            tripStartedManually = true;
+            startTripInternal(false);
         });
 
-        btnStopTrip.setOnClickListener(v -> {
-            isTripRecording = false;
-            File csvFile = tripRecorder.stopTrip();
-            statusText.setText(R.string.status_trip_stopped);
-            btnStartTrip.setEnabled(true);
-            btnStopTrip.setEnabled(false);
-            btnConnectElm.setEnabled(true);
-            editCarNumber.setEnabled(true);
-            editPhone.setEnabled(true);
-            if (csvFile != null) {
-                Toast.makeText(this, "Файл сохранён: " + csvFile.getName(),
-                        Toast.LENGTH_LONG).show();
-            }
-        });
+        // ---------- Ручной стоп поездки ----------
+        btnStopTrip.setOnClickListener(v -> stopTripInternal(false));
 
+        // ---------- Сброс ошибок ----------
         btnClearDtc.setOnClickListener(v -> {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.btn_clear_dtc)
@@ -185,6 +165,7 @@ public class MainActivity extends AppCompatActivity {
                     .show();
         });
 
+        // ---------- Отправка файлов ----------
         btnSendFiles.setOnClickListener(v -> {
             File tripDir = tripRecorder.getTripDirectory();
             if (tripDir == null || !tripDir.exists()) {
@@ -204,6 +185,85 @@ public class MainActivity extends AppCompatActivity {
                 });
             }).start();
         });
+    }
+
+    /**
+     * Запуск поездки.
+     *
+     * @param auto true — автостарт после подключения; false — вручную.
+     */
+    private void startTripInternal(boolean auto) {
+        if (!elmClient.isConnected()) {
+            Toast.makeText(this, R.string.msg_elm_not_connected,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String carNumber = editCarNumber.getText().toString().trim();
+        if (TextUtils.isEmpty(carNumber)) {
+            Toast.makeText(this, R.string.msg_enter_car_number,
+                    Toast.LENGTH_SHORT).show();
+            editCarNumber.requestFocus();
+            return;
+        }
+        String phone = editPhone.getText().toString().trim();
+        if (TextUtils.isEmpty(phone)) {
+            Toast.makeText(this, R.string.msg_enter_phone,
+                    Toast.LENGTH_SHORT).show();
+            editPhone.requestFocus();
+            return;
+        }
+
+        prefs.edit()
+             .putString(KEY_CAR_NUMBER, carNumber)
+             .putString(KEY_PHONE, phone)
+             .apply();
+
+        isTripRecording = true;
+        rpmZeroSince = 0;
+        tripRecorder.startTrip(carNumber, phone);
+        statusText.setText(R.string.status_trip_recording);
+        btnStartTrip.setEnabled(false);
+        btnStopTrip.setEnabled(true);
+        btnConnectElm.setEnabled(false);
+        editCarNumber.setEnabled(false);
+        editPhone.setEnabled(false);
+
+        playSound(ToneGenerator.TONE_PROP_BEEP2);
+        if (auto) {
+            Toast.makeText(this, R.string.msg_auto_start,
+                    Toast.LENGTH_LONG).show();
+        }
+
+        startPollingLoop();
+    }
+
+    /**
+     * Остановка поездки.
+     *
+     * @param auto true — автостоп по нулевым оборотам; false — вручную.
+     */
+    private void stopTripInternal(boolean auto) {
+        if (!isTripRecording) {
+            return;
+        }
+        isTripRecording = false;
+        File csvFile = tripRecorder.stopTrip();
+        statusText.setText(R.string.status_trip_stopped);
+        btnStartTrip.setEnabled(true);
+        btnStopTrip.setEnabled(false);
+        btnConnectElm.setEnabled(true);
+        editCarNumber.setEnabled(true);
+        editPhone.setEnabled(true);
+        tripStartedManually = false;
+
+        playSound(ToneGenerator.TONE_PROP_PROMPT);
+        if (auto) {
+            Toast.makeText(this, R.string.msg_auto_stop,
+                    Toast.LENGTH_LONG).show();
+        } else if (csvFile != null) {
+            Toast.makeText(this, "Файл сохранён: " + csvFile.getName(),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void startPollingLoop() {
@@ -226,6 +286,19 @@ public class MainActivity extends AppCompatActivity {
                 tripRecorder.writeSample(rpmVal, speedVal, coolantVal,
                         throttleVal, battVal);
 
+                // Проверка автостопа: обороты = 0 дольше 30 секунд.
+                if (rpmVal == 0) {
+                    if (rpmZeroSince == 0) {
+                        rpmZeroSince = System.currentTimeMillis();
+                    } else if (System.currentTimeMillis() - rpmZeroSince
+                            >= AUTO_STOP_RPM_ZERO_MS) {
+                        uiHandler.post(() -> stopTripInternal(true));
+                        break;
+                    }
+                } else {
+                    rpmZeroSince = 0;
+                }
+
                 final String display = String.format(Locale.US,
                         "Обороты: %.0f\nСкорость: %d км/ч\n" +
                         "ОЖ: %d °C\nДроссель: %.1f %%\n" +
@@ -234,7 +307,6 @@ public class MainActivity extends AppCompatActivity {
                         throttleVal, battVal);
                 uiHandler.post(() -> dataText.setText(display));
 
-                // Пауза до следующего цикла: 500 мс минус время опроса.
                 long elapsed = System.currentTimeMillis() - loopStart;
                 long sleepTime = PID_POLL_INTERVAL_MS - elapsed;
                 if (sleepTime > 0) {
@@ -247,6 +319,19 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }).start();
+    }
+
+    /**
+     * Проигрывание короткого звукового сигнала.
+     */
+    private void playSound(int toneType) {
+        try {
+            final ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
+            tg.startTone(toneType, 200);
+            uiHandler.postDelayed(tg::release, 500);
+        } catch (Exception e) {
+            // Звук не критичен — если не работает, продолжаем без него.
+        }
     }
 
     private void requestPermissionsIfNeeded() {

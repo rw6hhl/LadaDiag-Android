@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   strings.xml — строковые ресурсы приложения (русский язык).
-  Версия: V1.1 (15.10.2026)
-  Изменения V1.1: добавлены строки для полей «Госномер» и «Телефон».
-  Согласно A3.1 — все строки на русском.
+  Версия: V1.2 (16.10.2026)
+  Изменения V1.2: добавлены строки для версии, «идёт подключение», автостарта/автостопа, звуков.
 -->
 <resources>
     <string name="app_name">LadaDiag</string>
 
     <!-- Главный экран -->
     <string name="title_main">LadaDiag — сбор данных ELM327</string>
+    <string name="version_text">Версия 1.4</string>
     <string name="label_car_number">Госномер машины (например, в113ур)</string>
     <string name="label_phone">Телефон владельца (например, +79123456789)</string>
     <string name="btn_connect_elm">Подключиться к ELM327</string>
@@ -20,6 +20,7 @@
 
     <!-- Статусы -->
     <string name="status_disconnected">Не подключено</string>
+    <string name="status_connecting">Идёт подключение…</string>
     <string name="status_connected">Подключено к ELM327</string>
     <string name="status_trip_recording">Запись поездки…</string>
     <string name="status_trip_stopped">Поездка остановлена</string>
@@ -32,6 +33,8 @@
     <string name="msg_confirm_clear_dtc">Сбросить ошибки? Это очистит Check Engine и стоп-кадры.</string>
     <string name="msg_confirm_yes">Да</string>
     <string name="msg_confirm_no">Отмена</string>
+    <string name="msg_auto_start">ELM327 подключён. Поездка начата автоматически.</string>
+    <string name="msg_auto_stop">Обороты 0 более 30 секунд. Поездка остановлена.</string>
 
     <!-- Поля данных -->
     <string name="field_rpm">Обороты</string>
