@@ -1,8 +1,10 @@
 // Elm327Client.java — TCP-клиент для ELM327 Wi-Fi.
-// Версия: V1.2 (15.10.2026)
-// Изменения V1.2: добавлена привязка сокета к Wi-Fi-сети адаптера
-//   (bindProcessToNetwork). Это устраняет проблему, когда Android
-//   маршрутизирует трафик через мобильные данные, хотя Wi-Fi подключён.
+// Версия: V1.3 (15.10.2026)
+// Изменения V1.3 (относительно V1.2):
+//   - ATSP6 (принудительный CAN) заменён на ATSP0 (автоопределение протокола).
+//     Это работает с любой Lada (CAN, K-Line, ISO 9141-2).
+//   - Добавлено логирование ответа ATDPN (какой протокол выбран).
+//   - Привязка сокета к Wi-Fi-сети адаптера (bindProcessToNetwork) сохранена.
 // Среда: Android Studio, Java 17.
 
 package com.ladadiag.android;
@@ -34,7 +36,6 @@ public class Elm327Client {
     private boolean connected = false;
 
     private ConnectivityManager connectivityManager;
-    private ConnectivityManager.NetworkCallback networkCallback;
 
     /**
      * Подключение к ELM327 по Wi-Fi с привязкой к сети адаптера.
@@ -45,9 +46,8 @@ public class Elm327Client {
      * @return true, если подключение успешно.
      */
     public synchronized boolean connect(Context context, String host, int port) {
-        // --- Привязка к Wi-Fi-сети адаптера ---
-        // Android по умолчанию использует мобильные данные, если Wi-Fi без интернета.
-        // bindProcessToNetwork заставляет все TCP-соединения идти через Wi-Fi адаптера.
+        // Привязка всех TCP-соединений приложения к Wi-Fi-сети адаптера.
+        // Это устраняет проблему, когда Android использует мобильные данные.
         try {
             connectivityManager = (ConnectivityManager)
                     context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -57,7 +57,8 @@ public class Elm327Client {
                     .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                     .build();
 
-            connectivityManager.requestNetwork(request, new ConnectivityManager.NetworkCallback() {
+            connectivityManager.requestNetwork(request,
+                    new ConnectivityManager.NetworkCallback() {
                 @Override
                 public void onAvailable(Network network) {
                     connectivityManager.bindProcessToNetwork(network);
@@ -68,7 +69,7 @@ public class Elm327Client {
             Log.w(TAG, "Не удалось привязать сокет к Wi-Fi: " + e.getMessage());
         }
 
-        // --- Подключение TCP ---
+        // Подключение TCP.
         try {
             socket = new Socket();
             socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
@@ -79,14 +80,19 @@ public class Elm327Client {
 
             connected = true;
 
-            sendCommand("ATZ");
+            // Инициализация ELM327.
+            sendCommand("ATZ");        // Сброс адаптера.
+            Thread.sleep(1000);
+            sendCommand("ATE0");       // Отключить эхо.
+            sendCommand("ATL0");       // Отключить переводы строк.
+            sendCommand("ATH0");       // Отключить заголовки.
+            sendCommand("ATSP0");      // АВТООПРЕДЕЛЕНИЕ ПРОТОКОЛА (ключевое!).
+            sendCommand("ATAT1");      // Автоматическая настройка таймаутов.
             Thread.sleep(500);
-            sendCommand("ATE0");
-            sendCommand("ATL0");
-            sendCommand("ATH0");
-            sendCommand("ATSP6");
-            sendCommand("ATAT1");
-            Thread.sleep(100);
+
+            // Логирование выбранного протокола (для диагностики).
+            String protocol = sendCommand("ATDPN");
+            Log.i(TAG, "Протокол ELM327: " + protocol);
 
             Log.i(TAG, "ELM327 подключён: " + host + ":" + port);
             return true;
@@ -131,7 +137,8 @@ public class Elm327Client {
     public synchronized int readPid(String pid, int len) {
         String response = sendCommand(pid);
         if (response.isEmpty() || response.contains("NO DATA")
-                || response.contains("ERROR") || response.contains("UNABLE")) {
+                || response.contains("ERROR") || response.contains("UNABLE")
+                || response.contains("SEARCHING")) {
             return -1;
         }
         try {
@@ -159,7 +166,6 @@ public class Elm327Client {
 
     public synchronized void disconnect() {
         connected = false;
-        // Отвязка от сети адаптера (возврат к мобильным данным).
         try {
             if (connectivityManager != null) {
                 connectivityManager.bindProcessToNetwork(null);

@@ -1,7 +1,9 @@
 // MainActivity.java — главный экран Android-приложения LadaDiag.
-// Версия: V1.2 (15.10.2026)
-// Изменения V1.2: добавлен FLAG_KEEP_SCREEN_ON (экран не гаснет,
-//   пока работает приложение). Метод connect() вызывается с контекстом.
+// Версия: V1.3 (15.10.2026)
+// Изменения V1.3 (относительно V1.2):
+//   - Интервал опроса PID увеличен с 100 мс до 500 мс.
+//     ELM327 не успевает отвечать на 5 PID за 100 мс (реальный цикл 10-30 сек).
+//   - Флаг FLAG_KEEP_SCREEN_ON сохранён (экран не гаснет).
 // Среда: Android Studio, Java 17.
 
 package com.ladadiag.android;
@@ -36,6 +38,10 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_CAR_NUMBER = "car_number";
     private static final String KEY_PHONE = "phone";
 
+    // Интервал опроса PID (мс). Увеличен с 100 до 500 —
+    // ELM327 не успевает отвечать на 5 PID за 100 мс.
+    private static final int PID_POLL_INTERVAL_MS = 500;
+
     private EditText editCarNumber;
     private EditText editPhone;
     private TextView statusText;
@@ -59,7 +65,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Не давать экрану гаснуть, пока приложение на переднем плане.
+        // Экран не гаснет, пока приложение на переднем плане.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         editCarNumber = findViewById(R.id.editCarNumber);
@@ -87,7 +93,6 @@ public class MainActivity extends AppCompatActivity {
         btnConnectElm.setOnClickListener(v -> {
             statusText.setText(R.string.status_disconnected);
             new Thread(() -> {
-                // Передаём контекст для привязки сокета к Wi-Fi адаптера.
                 boolean ok = elmClient.connect(MainActivity.this, "192.168.0.10", 35000);
                 uiHandler.post(() -> {
                     if (ok) {
@@ -204,6 +209,8 @@ public class MainActivity extends AppCompatActivity {
     private void startPollingLoop() {
         new Thread(() -> {
             while (isTripRecording) {
+                long loopStart = System.currentTimeMillis();
+
                 int rpm = elmClient.readPid("010C", 2);
                 int speed = elmClient.readPid("010D", 1);
                 int coolant = elmClient.readPid("0105", 1);
@@ -227,11 +234,16 @@ public class MainActivity extends AppCompatActivity {
                         throttleVal, battVal);
                 uiHandler.post(() -> dataText.setText(display));
 
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
+                // Пауза до следующего цикла: 500 мс минус время опроса.
+                long elapsed = System.currentTimeMillis() - loopStart;
+                long sleepTime = PID_POLL_INTERVAL_MS - elapsed;
+                if (sleepTime > 0) {
+                    try {
+                        Thread.sleep(sleepTime);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
         }).start();
